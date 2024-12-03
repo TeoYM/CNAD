@@ -1,19 +1,24 @@
-// billing_service.go
-
 package main
 
 import (
+	"database/sql"
 	"encoding/json"
 	"log"
 	"net/http"
 	"time"
 
+	_ "github.com/go-sql-driver/mysql"
 	"github.com/gorilla/mux"
 )
 
 // BillingService represents the billing service
 type BillingService struct {
-	// Add dependencies here (e.g., database connection)
+	db *sql.DB
+}
+
+// NewBillingService returns a new billing service
+func NewBillingService(db *sql.DB) *BillingService {
+	return &BillingService{db: db}
 }
 
 // Billing represents a billing record
@@ -24,11 +29,6 @@ type Billing struct {
 	RentalPeriod string    `json:"rental_period"`
 	TotalCost    float64   `json:"total_cost"`
 	CreatedAt    time.Time `json:"created_at"`
-}
-
-// NewBillingService returns a new billing service
-func NewBillingService() *BillingService {
-	return &BillingService{}
 }
 
 // CreateBillingRecord handles billing record creation
@@ -44,8 +44,12 @@ func (s *BillingService) CreateBillingRecord(w http.ResponseWriter, r *http.Requ
 	// ( implementation omitted for brevity )
 	// ...
 
-	// Save billing record to database ( implementation omitted for brevity )
-	// ...
+	// Save billing record to database
+	_, err = s.db.Exec("INSERT INTO Billings (UserID, VehicleID, RentalPeriod, TotalCost, CreatedAt) VALUES (?, ?, ?, ?, ?)", billing.UserID, billing.VehicleID, billing.RentalPeriod, billing.TotalCost, time.Now())
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
 
 	w.WriteHeader(http.StatusCreated)
 	json.NewEncoder(w).Encode(billing)
@@ -56,16 +60,16 @@ func (s *BillingService) GetBillingRecord(w http.ResponseWriter, r *http.Request
 	params := mux.Vars(r)
 	billingID := params["id"]
 
-	// Find billing record by ID ( implementation omitted for brevity )
-	// ...
-
-	if billingID == "" {
+	// Find billing record by ID
+	var billing Billing
+	err := s.db.QueryRow("SELECT * FROM Billings WHERE ID = ?", billingID).Scan(&billing.ID, &billing.UserID, &billing.VehicleID, &billing.RentalPeriod, &billing.TotalCost, &billing.CreatedAt)
+	if err != nil {
 		http.Error(w, "Billing record not found", http.StatusNotFound)
 		return
 	}
 
 	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(Billing{ID: billingID})
+	json.NewEncoder(w).Encode(billing)
 }
 
 // UpdateBillingRecord handles billing record updates
@@ -80,8 +84,12 @@ func (s *BillingService) UpdateBillingRecord(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	// Update billing record in database ( implementation omitted for brevity )
-	// ...
+	// Update billing record in database
+	_, err = s.db.Exec("UPDATE Billings SET UserID = ?, VehicleID = ?, RentalPeriod = ?, TotalCost = ? WHERE ID = ?", billing.UserID, billing.VehicleID, billing.RentalPeriod, billing.TotalCost, billingID)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
 
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(billing)
@@ -92,20 +100,36 @@ func (s *BillingService) DeleteBillingRecord(w http.ResponseWriter, r *http.Requ
 	params := mux.Vars(r)
 	billingID := params["id"]
 
-	// Delete billing record from database ( implementation omitted for brevity )
-	// ...
+	// Delete billing record from database
+	_, err := s.db.Exec("DELETE FROM Billings WHERE ID = ?", billingID)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
 
 	w.WriteHeader(http.StatusNoContent)
 }
 
 func main() {
+	// Connect to database
+	db, err := sql.Open("mysql", "user:password@tcp(127.0.0.1:3306)/my_db")
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer db.Close()
+
+	// Create billing service
+	billingService := NewBillingService(db)
+
+	// Create router
 	router := mux.NewRouter()
-	billingService := NewBillingService()
 
-	router.HandleFunc("/billing", billingService.CreateBillingRecord).Methods("POST")
-	router.HandleFunc("/billing/{id}", billingService.GetBillingRecord).Methods("GET")
-	router.HandleFunc("/billing/{id}", billingService.UpdateBillingRecord).Methods("PUT")
-	router.HandleFunc("/billing/{id}", billingService.DeleteBillingRecord).Methods("DELETE")
+	// Register routes
+	router.HandleFunc("/billings", billingService.CreateBillingRecord).Methods("POST")
+	router.HandleFunc("/billings/{id}", billingService.GetBillingRecord).Methods("GET")
+	router.HandleFunc("/billings/{id}", billingService.UpdateBillingRecord).Methods("PUT")
+	router.HandleFunc("/billings/{id}", billingService.DeleteBillingRecord).Methods("DELETE")
 
+	// Start server
 	log.Fatal(http.ListenAndServe(":8082", router))
 }
