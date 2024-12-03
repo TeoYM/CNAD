@@ -58,9 +58,29 @@ func (s *PromotionService) GetPromotion(w http.ResponseWriter, r *http.Request) 
 
 	// Find promotion by ID
 	var promotion Promotion
-	err := s.db.QueryRow("SELECT * FROM Promotions WHERE ID = ?", promotionID).Scan(&promotion.ID, &promotion.Code, &promotion.Description, &promotion.Discount, &promotion.ExpiryDate, &promotion.CreatedAt)
+	var expiryDateStr string
+	var createdAtStr string
+	err := s.db.QueryRow("SELECT * FROM Promotions WHERE ID = ?", promotionID).Scan(&promotion.ID, &promotion.Code, &promotion.Description, &promotion.Discount, &expiryDateStr, &createdAtStr)
 	if err != nil {
-		http.Error(w, "Promotion not found", http.StatusNotFound)
+		if err == sql.ErrNoRows {
+			http.Error(w, "Promotion not found", http.StatusNotFound)
+		} else {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+		}
+		return
+	}
+
+	// Parse expiry date string into time.Time object
+	promotion.ExpiryDate, err = time.Parse("2006-01-02", expiryDateStr)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	// Parse created at date string into time.Time object
+	promotion.CreatedAt, err = time.Parse("2006-01-02 15:04:05", createdAtStr)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
@@ -108,7 +128,7 @@ func (s *PromotionService) DeletePromotion(w http.ResponseWriter, r *http.Reques
 
 func main() {
 	// Connect to database
-	db, err := sql.Open("mysql", "user:password@tcp(127.0.0.1:3306)/my_db")
+	db, err := sql.Open("mysql", "user:password@tcp(127.0.0.1:3306)/assg1")
 	if err != nil {
 		log.Fatal(err)
 	}
