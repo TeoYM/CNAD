@@ -7,10 +7,22 @@ import (
 	"net/http"
 	"time"
 
-	_ "github.com/go-sql-driver/mysql"
+	"github.com/dgrijalva/jwt-go"
 	"github.com/gorilla/mux"
 	"golang.org/x/crypto/bcrypt"
+
+	_ "github.com/go-sql-driver/mysql"
 )
+
+// Config represents the application configuration
+type Config struct {
+	DatabaseUsername string
+	DatabasePassword string
+	DatabaseHost     string
+	DatabasePort     string
+	DatabaseName     string
+	JWTSecretKey     string
+}
 
 // UserService represents the user service
 type UserService struct {
@@ -83,16 +95,23 @@ func (s *UserService) LoginUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Generate JWT token ( implementation omitted for brevity )
-	// ...
+	// Generate JWT token
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
+		"email": user.Email,
+	})
+	tokenString, err := token.SignedString([]byte("secretkey"))
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
 
 	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode("Login successful")
+	json.NewEncoder(w).Encode(map[string]string{"token": tokenString})
 }
 
 func main() {
 	// Connect to database
-	db, err := sql.Open("mysql", "user:password@tcp(127.0.0.1:3306)/my_db")
+	db, err := sql.Open("mysql", "user:password@tcp(127.0.0.1:3306)/assg1")
 	if err != nil {
 		log.Fatal(err)
 	}
