@@ -23,6 +23,10 @@ func main() {
 	// Create router
 	router := mux.NewRouter()
 
+	router.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		http.ServeFile(w, r, "login.html")
+	})
+
 	// Register routes
 	router.HandleFunc("/users", handler.RegisterUser).Methods("POST")
 	router.HandleFunc("/login", handler.LoginUser).Methods("POST")

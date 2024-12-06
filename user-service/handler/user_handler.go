@@ -39,15 +39,29 @@ func RegisterUser(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(createdUser)
 }
 
-// LoginUser handles user login
 func LoginUser(w http.ResponseWriter, r *http.Request) {
 	var user model.User
-	err := json.NewDecoder(r.Body).Decode(&user)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
+
+	// Check if the request body is JSON
+	if r.Header.Get("Content-Type") == "application/json" {
+		err := json.NewDecoder(r.Body).Decode(&user)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+	} else {
+		// Handle URL-encoded form payload
+		err := r.ParseForm()
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+
+		user.Email = r.FormValue("email")
+		user.Password = r.FormValue("password")
 	}
 
+	// Authenticate the user
 	token, err := userService.LoginUser(user)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusUnauthorized)
